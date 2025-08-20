@@ -1,4 +1,22 @@
 # -*- coding: utf-8 -*-
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# Health check用のダミーWebサーバー
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def run_health_server():
+    server = HTTPServer(("0.0.0.0", 8000), HealthHandler)
+    server.serve_forever()
+
+# 別スレッドで起動
+threading.Thread(target=run_health_server, daemon=True).start()
+
+
 import os
 import json
 import random
