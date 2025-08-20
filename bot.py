@@ -743,40 +743,6 @@ async def create_and_announce_game(guild: discord.Guild, match_id: int, game_num
     team_a_members = real_members_only(guild, team_a_list)
     team_b_members = real_members_only(guild, team_b_list)
 
-    # チームスレッドをロビー配下に作成
-    ch_a = await lobby.create_thread(
-        name=f"試合{game_num}-チームA",
-        type=discord.ChannelType.private_thread
-    )
-    ch_b = await lobby.create_thread(
-        name=f"試合{game_num}-チームB",
-        type=discord.ChannelType.private_thread
-    )
-    # チームA
-    for m in team_a_members:
-        try:
-            await ch_a.add_user(m)
-            await asyncio.sleep(0.5)  # 200ms 待機してAPI連打を回避
-        except Exception as e:
-            print(f"チームA追加失敗: {m} {e}")
-
-    # チームB
-    for m in team_b_members:
-        try:
-            await ch_b.add_user(m)
-            await asyncio.sleep(0.5)
-        except Exception as e:
-            print(f"チームB追加失敗: {m} {e}")
-
-    mi["teams"] = {"A": [id_of(p) for p in team_a_list], "B": [id_of(p) for p in team_b_list]}
-    mi["games"].append({
-        "game_num": game_num,
-        "team_a": mi["teams"]["A"],
-        "team_b": mi["teams"]["B"],
-        "ch_a_id": ch_a.id,
-        "ch_b_id": ch_b.id
-    })
-
     def mentions_for(lst):
         res = []
         for p in lst:
@@ -789,13 +755,51 @@ async def create_and_announce_game(guild: discord.Guild, match_id: int, game_num
                 res.append(m.mention if m else str(p))
         return " ".join(res)
 
+    # ✅ 先にチーム分けメッセージを送る
     await lobby.send(
         f"**試合 {game_num} 開始！**\n"
         f"チームA: {mentions_for(team_a_list)}\n"
         f"チームB: {mentions_for(team_b_list)}\n"
     )
 
+    # その後でチームスレッドを作成
+    ch_a = await lobby.create_thread(
+        name=f"試合{game_num}-チームA",
+        type=discord.ChannelType.private_thread
+    )
+    ch_b = await lobby.create_thread(
+        name=f"試合{game_num}-チームB",
+        type=discord.ChannelType.private_thread
+    )
+
+    # チームAに招待
+    for m in team_a_members:
+        try:
+            await ch_a.add_user(m)
+            await asyncio.sleep(0.5)  # API連打回避
+        except Exception as e:
+            print(f"チームA追加失敗: {m} {e}")
+
+    # チームBに招待
+    for m in team_b_members:
+        try:
+            await ch_b.add_user(m)
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            print(f"チームB追加失敗: {m} {e}")
+
+    # DB用に保存
+    mi["teams"] = {"A": [id_of(p) for p in team_a_list], "B": [id_of(p) for p in team_b_list]}
+    mi["games"].append({
+        "game_num": game_num,
+        "team_a": mi["teams"]["A"],
+        "team_b": mi["teams"]["B"],
+        "ch_a_id": ch_a.id,
+        "ch_b_id": ch_b.id
+    })
+
     save_match(match_id)
+
 
 
 
