@@ -27,6 +27,7 @@ from typing import Dict, List, Set, Any, Tuple, Optional
 import math  # only used for formatting, not for rating
 import discord
 from discord.ext import commands, tasks
+from discord.ui import View, Button
 
 # ========= 設定 =========
 TOKEN = os.getenv("DISCORD_TOKEN") or "YOUR_DISCORD_TOKEN_HERE"
@@ -659,7 +660,7 @@ async def status_command(interaction: discord.Interaction, target: str | None = 
 
     # Embed 組み立て
     embed = discord.Embed(
-        title=f"{member.display_name} の成績",
+        title=f"{member.display_name}",
         color=discord.Color.blue()
     )
     embed.add_field(name="レート", value=f"{display:.1f}", inline=True)
@@ -669,6 +670,154 @@ async def status_command(interaction: discord.Interaction, target: str | None = 
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+class RankingView(View):
+    def __init__(self, pages: list[discord.Embed], user: discord.User,
+                 start: int, end: int, guild: discord.Guild):
+        super().__init__(timeout=None)  # ⬅ 無期限
+        self.pages = pages
+        self.current = 0
+        self.user = user
+        self.start = start
+        self.end = end
+        self.guild = guild
+        self.update_buttons()
+
+    def update_buttons(self):
+        for child in self.children:
+            if isinstance(child, Button):
+                if child.custom_id == "first":
+                    child.disabled = self.current == 0
+                elif child.custom_id == "prev":
+                    child.disabled = self.current == 0
+                elif child.custom_id == "next":
+                    child.disabled = self.current == len(self.pages) - 1
+                elif child.custom_id == "last":
+                    child.disabled = self.current == len(self.pages) - 1
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # 実行者以外は操作不可
+        if interaction.user.id != self.user.id:
+            await interaction.response.send_message("⚠️ この操作はコマンド実行者のみ可能です。", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="⏮", style=discord.ButtonStyle.secondary, custom_id="first")
+    async def first_page(self, interaction: discord.Interaction, button: Button):
+        self.current = 0
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current], view=self)
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, custom_id="prev")
+    async def prev_page(self, interaction: discord.Interaction, button: Button):
+        self.current -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current], view=self)
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, custom_id="next")
+    async def next_page(self, interaction: discord.Interaction, button: Button):
+        self.current += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current], view=self)
+
+    @discord.ui.button(label="⏭", style=discord.ButtonStyle.secondary, custom_id="last")
+    async def last_page(self, interaction: discord.Interaction, button: Button):
+        self.current = len(self.pages) - 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current], view=self)
+
+    @discord.ui.button(label="🔄 更新", style=discord.ButtonStyle.primary, custom_id="refresh")
+    async def refresh(self, interaction: discord.Interaction, button: Button):
+        # DBから再取得して最新の順位表を作り直す
+        cur.execute("SELECT user_id, mu FROM users")
+        all_users = cur.fetchall()
+        sorted_users = sorted(all_users, key=lambda x: x[1], reverse=True)
+
+        total = len(sorted_users)
+        start = max(1, self.start)
+        end = min(total, self.end)
+
+        lines = []
+        for i in range(start, end + 1):
+            uid, mu = sorted_users[i - 1]
+            member = self.guild.get_member(uid)
+            name = member.display_name if member else f"Unknown({uid})"
+            lines.append(f"{i}位: {name} | {mu:.1f}")
+
+        PAGE_SIZE = 20
+        self.pages = []
+        for i in range(0, len(lines), PAGE_SIZE):
+            chunk = lines[i:i + PAGE_SIZE]
+            embed = discord.Embed(
+                title=f"レート順位表 {start}位〜{end}位",
+                description="\n".join(chunk),
+                color=discord.Color.gold()
+            )
+            embed.set_footer(text=f"ページ {len(self.pages)+1}/{(len(lines)-1)//PAGE_SIZE+1}")
+            self.pages.append(embed)
+
+        # ページ番号をリセットして再表示
+        self.current = 0
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current], view=self)
+
+
+@bot.tree.command(name="r", description="レートの順位表を表示します")
+async def ranking_command(
+    interaction: discord.Interaction,
+    start: int | None = None,
+    end: int | None = None
+):
+    # 範囲決定
+    if start is None and end is None:
+        start, end = 1, 100
+    elif start is not None and end is None:
+        start, end = 1, start
+    else:
+        if start is None or end is None:
+            await interaction.response.send_message("⚠️ 引数の指定が不正です。", ephemeral=True)
+            return
+        if start > end:
+            start, end = end, start
+
+    # DB から全ユーザー取得
+    cur.execute("SELECT user_id, mu FROM users")
+    all_users = cur.fetchall()
+    if not all_users:
+        await interaction.response.send_message("⚠️ ユーザーデータがありません。", ephemeral=True)
+        return
+
+    # ソート
+    sorted_users = sorted(all_users, key=lambda x: x[1], reverse=True)
+    total = len(sorted_users)
+
+    start = max(1, start)
+    end = min(total, end)
+    if start > total:
+        await interaction.response.send_message("⚠️ 指定範囲にユーザーがいません。", ephemeral=True)
+        return
+
+    # ライン作成
+    lines = []
+    for i in range(start, end + 1):
+        uid, mu = sorted_users[i - 1]
+        member = interaction.guild.get_member(uid)
+        name = member.display_name if member else f"Unknown({uid})"
+        lines.append(f"{i}位: {name} | {mu:.1f}")
+
+    PAGE_SIZE = 20
+    pages = []
+    for i in range(0, len(lines), PAGE_SIZE):
+        chunk = lines[i:i + PAGE_SIZE]
+        embed = discord.Embed(
+            title=f"順位表 {start}位〜{end}位",
+            description="\n".join(chunk),
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text=f"ページ {len(pages)+1}/{(len(lines)-1)//PAGE_SIZE+1}")
+        pages.append(embed)
+
+    view = RankingView(pages, interaction.user, start, end, interaction.guild)
+    await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
 
 @bot.tree.command(name="c", description="マッチング待機リストに参加")
 async def match_join(interaction: discord.Interaction):
