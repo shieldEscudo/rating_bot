@@ -844,6 +844,36 @@ async def match_random8(interaction: discord.Interaction):
 async def match_leave(interaction: discord.Interaction):
     await handle_match_leave(interaction)
 
+@bot.tree.command(name="sql", description="SQL を直接実行します（管理者専用）")
+async def sql_command(interaction: discord.Interaction, query: str):
+    # 管理者チェック（必要に応じて権限を確認）
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("管理者のみ使用可能です。", ephemeral=True)
+        return
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute(query)
+
+        # 結果をフェッチ
+        rows = cur.fetchall()
+        conn.commit()
+        conn.close()
+
+        if rows:
+            # 結果を文字列化（長すぎる場合はカット）
+            result = "\n".join([str(row) for row in rows])
+            if len(result) > 1900:  # Discord のメッセージ制限対応
+                result = result[:1900] + "\n... (省略)"
+        else:
+            result = "OK ✅"
+
+        await interaction.response.send_message(f"```sql\n{query}\n```\n結果:\n```{result}```")
+
+    except Exception as e:
+        await interaction.response.send_message(f"エラー: {e}", ephemeral=True)
+
 # ========= マッチ進行関連の関数 =========
 async def start_match_core(guild: discord.Guild, players: List[Any], is_dummy_mode: bool):
     parent_category = guild.get_channel(PARENT_CHANNEL_ID)
