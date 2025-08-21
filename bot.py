@@ -764,21 +764,8 @@ class RankingView(View):
 @bot.tree.command(name="r", description="レートの順位表を表示します")
 async def ranking_command(
     interaction: discord.Interaction,
-    start: int | None = None,
-    end: int | None = None
+    start: int | None = None,   # 開始順位のみ
 ):
-    # 範囲決定
-    if start is None and end is None:
-        start, end = 1, 100
-    elif start is not None and end is None:
-        start, end = 1, start
-    else:
-        if start is None or end is None:
-            await interaction.response.send_message("⚠️ 引数の指定が不正です。", ephemeral=True)
-            return
-        if start > end:
-            start, end = end, start
-
     # DB から全ユーザー取得
     cur.execute("SELECT user_id, mu FROM users")
     all_users = cur.fetchall()
@@ -790,33 +777,37 @@ async def ranking_command(
     sorted_users = sorted(all_users, key=lambda x: x[1], reverse=True)
     total = len(sorted_users)
 
+    # 開始順位の決定
+    if start is None:
+        start = 1
     start = max(1, start)
-    end = min(total, end)
     if start > total:
-        await interaction.response.send_message("⚠️ 指定範囲にユーザーがいません。", ephemeral=True)
+        await interaction.response.send_message("⚠️ 指定された開始順位は範囲外です。", ephemeral=True)
         return
 
-    # ライン作成
+    # ライン作成（startから最後まで）
     lines = []
-    for i in range(start, end + 1):
+    for i in range(start, total + 1):
         uid, mu = sorted_users[i - 1]
         member = interaction.guild.get_member(uid)
         name = member.display_name if member else f"Unknown({uid})"
         lines.append(f"{i}位: {name} | {mu:.1f}")
 
+    # ページ分割
     PAGE_SIZE = 20
     pages = []
     for i in range(0, len(lines), PAGE_SIZE):
         chunk = lines[i:i + PAGE_SIZE]
         embed = discord.Embed(
-            title=f"順位表 {start}位〜{end}位",
+            title=f"順位表 {start}位〜{total}位",
             description="\n".join(chunk),
             color=discord.Color.gold()
         )
-        embed.set_footer(text=f"ページ {len(pages)+1}/{(len(lines)-1)//PAGE_SIZE+1}")
+        embed.set_footer(text=f"ページ {len(pages)+1}/{(len(lines)-1)//PAGE_SIZE+1} | 全{total}人中")
         pages.append(embed)
 
-    view = RankingView(pages, interaction.user, start, end, interaction.guild)
+    # ページ切替ビューをセット
+    view = RankingView(pages, interaction.user, start, total, interaction.guild)
     await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
 
 @bot.tree.command(name="c", description="マッチング待機リストに参加")
