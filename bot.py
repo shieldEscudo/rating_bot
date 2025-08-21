@@ -528,8 +528,91 @@ async def on_member_join(member: discord.Member):
 
    
 
-@bot.tree.command(name="r", description="指定ユーザー、または自分のレートを確認します")
-async def str_command(interaction: discord.Interaction, target: str | None = None):
+# @bot.tree.command(name="r", description="指定ユーザー、または自分のレートを確認します")
+# async def str_command(interaction: discord.Interaction, target: str | None = None):
+#     guild = interaction.guild or bot.get_guild(GUILD_ID)
+#     if not guild:
+#         await interaction.response.send_message("⚠️ サーバーが見つかりません。", ephemeral=True)
+#         return
+
+#     result = find_member_by_input(guild, target, interaction.user)
+
+#     if isinstance(result, list):  # 複数候補
+#         candidates = "\n".join([f"- {m.display_name} (ID: {m.name})" for m in result[:10]])
+#         await interaction.response.send_message(
+#             f"⚠️ 名前 `{target}` に一致するユーザーが複数います。\n以下から選んでください：\n{candidates}",
+#             ephemeral=True
+#         )
+#         return
+
+#     member = result
+#     if not member:
+#         await interaction.response.send_message(f"⚠️ ユーザー `{target}` が見つかりません。", ephemeral=True)
+#         return
+#     if member.bot:
+#         await interaction.response.send_message("Botは指定できません。", ephemeral=True)
+#         return
+
+#     # TrueSkill 取得
+#     r = get_user_trueskill(member.id)
+#     display = to_display(r.mu)
+
+#     # 順位計算
+#     cur.execute("SELECT user_id, mu FROM users")
+#     all_users = cur.fetchall()
+#     sorted_users = sorted(all_users, key=lambda x: x[1], reverse=True)
+#     rank = next((i for i, (uid, _) in enumerate(sorted_users, start=1) if uid == member.id), None)
+#     total = len(sorted_users)
+
+#     msg = f"{member.display_name} | {display:.1f} | "
+#     if rank:
+#         msg += f"{rank}位 / {total}人中"
+
+#     await interaction.response.send_message(msg, ephemeral=True)
+
+
+
+
+# @bot.tree.command(name="w", description="自分や指定ユーザーの勝率を表示します")
+# async def winrate_command(interaction: discord.Interaction, target: str | None = None):
+#     guild = interaction.guild or bot.get_guild(GUILD_ID)
+#     if not guild:
+#         await interaction.response.send_message("⚠️ サーバーが見つかりません。", ephemeral=True)
+#         return
+
+#     result = find_member_by_input(guild, target, interaction.user)
+
+#     if isinstance(result, list):  # 複数候補
+#         candidates = "\n".join([f"- {m.display_name} (ID: {m.name})" for m in result[:10]])
+#         await interaction.response.send_message(
+#             f"⚠️ 名前 `{target}` に一致するユーザーが複数います。\n以下から選んでください：\n{candidates}",
+#             ephemeral=True
+#         )
+#         return
+
+#     member = result
+#     if not member:
+#         await interaction.response.send_message(f"⚠️ ユーザー `{target}` が見つかりません。", ephemeral=True)
+#         return
+#     if member.bot:
+#         await interaction.response.send_message("Botは指定できません。", ephemeral=True)
+#         return
+
+#     ensure_user_row(member.id)
+#     cur.execute("SELECT wins, games FROM users WHERE user_id=?", (member.id,))
+#     wins, games = cur.fetchone()
+#     if not games or games == 0:
+#         msg = f"{member.display_name} さんはまだ試合データがありません。"
+#     else:
+#         wr = wins / games * 100
+#         msg = f"{member.display_name} さんの勝率: {wins}/{games} ({wr:.1f}%)"
+
+#     await interaction.response.send_message(msg, ephemeral=True)
+
+import discord
+
+@bot.tree.command(name="s", description="指定ユーザー、または自分の成績を確認します")
+async def status_command(interaction: discord.Interaction, target: str | None = None):
     guild = interaction.guild or bot.get_guild(GUILD_ID)
     if not guild:
         await interaction.response.send_message("⚠️ サーバーが見つかりません。", ephemeral=True)
@@ -564,51 +647,27 @@ async def str_command(interaction: discord.Interaction, target: str | None = Non
     rank = next((i for i, (uid, _) in enumerate(sorted_users, start=1) if uid == member.id), None)
     total = len(sorted_users)
 
-    msg = f"{member.display_name} | {display:.1f} | "
-    if rank:
-        msg += f"{rank}位 / {total}人中"
-
-    await interaction.response.send_message(msg, ephemeral=True)
-
-
-
-
-@bot.tree.command(name="w", description="自分や指定ユーザーの勝率を表示します")
-async def winrate_command(interaction: discord.Interaction, target: str | None = None):
-    guild = interaction.guild or bot.get_guild(GUILD_ID)
-    if not guild:
-        await interaction.response.send_message("⚠️ サーバーが見つかりません。", ephemeral=True)
-        return
-
-    result = find_member_by_input(guild, target, interaction.user)
-
-    if isinstance(result, list):  # 複数候補
-        candidates = "\n".join([f"- {m.display_name} (ID: {m.name})" for m in result[:10]])
-        await interaction.response.send_message(
-            f"⚠️ 名前 `{target}` に一致するユーザーが複数います。\n以下から選んでください：\n{candidates}",
-            ephemeral=True
-        )
-        return
-
-    member = result
-    if not member:
-        await interaction.response.send_message(f"⚠️ ユーザー `{target}` が見つかりません。", ephemeral=True)
-        return
-    if member.bot:
-        await interaction.response.send_message("Botは指定できません。", ephemeral=True)
-        return
-
+    # 勝率計算
     ensure_user_row(member.id)
     cur.execute("SELECT wins, games FROM users WHERE user_id=?", (member.id,))
     wins, games = cur.fetchone()
     if not games or games == 0:
-        msg = f"{member.display_name} さんはまだ試合データがありません。"
+        wr_text = "試合データなし"
     else:
         wr = wins / games * 100
-        msg = f"{member.display_name} さんの勝率: {wins}/{games} ({wr:.1f}%)"
+        wr_text = f"{wr:.1f}% ({wins}/{games})"
 
-    await interaction.response.send_message(msg, ephemeral=True)
+    # Embed 組み立て
+    embed = discord.Embed(
+        title=f"{member.display_name} の成績",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="レート", value=f"{display:.1f}", inline=True)
+    if rank:
+        embed.add_field(name="順位", value=f"{rank}位 / {total}人中", inline=True)
+    embed.add_field(name="勝率", value=wr_text, inline=True)
 
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 @bot.tree.command(name="c", description="マッチング待機リストに参加")
