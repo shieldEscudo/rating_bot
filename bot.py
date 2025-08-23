@@ -761,54 +761,54 @@ class RankingView(View):
         await interaction.response.edit_message(embed=self.pages[self.current], view=self)
 
 
-@bot.tree.command(name="r", description="レートの順位表を表示します")
-async def ranking_command(
-    interaction: discord.Interaction,
-    start: int | None = None,   # 開始順位のみ
-):
-    # DB から全ユーザー取得
-    cur.execute("SELECT user_id, mu FROM users")
-    all_users = cur.fetchall()
-    if not all_users:
-        await interaction.response.send_message("⚠️ ユーザーデータがありません。", ephemeral=True)
-        return
+# @bot.tree.command(name="r", description="レートの順位表を表示します")
+# async def ranking_command(
+#     interaction: discord.Interaction,
+#     start: int | None = None,   # 開始順位のみ
+# ):
+#     # DB から全ユーザー取得
+#     cur.execute("SELECT user_id, mu FROM users")
+#     all_users = cur.fetchall()
+#     if not all_users:
+#         await interaction.response.send_message("⚠️ ユーザーデータがありません。", ephemeral=True)
+#         return
 
-    # ソート
-    sorted_users = sorted(all_users, key=lambda x: x[1], reverse=True)
-    total = len(sorted_users)
+#     # ソート
+#     sorted_users = sorted(all_users, key=lambda x: x[1], reverse=True)
+#     total = len(sorted_users)
 
-    # 開始順位の決定
-    if start is None:
-        start = 1
-    start = max(1, start)
-    if start > total:
-        await interaction.response.send_message("⚠️ 指定された開始順位は範囲外です。", ephemeral=True)
-        return
+#     # 開始順位の決定
+#     if start is None:
+#         start = 1
+#     start = max(1, start)
+#     if start > total:
+#         await interaction.response.send_message("⚠️ 指定された開始順位は範囲外です。", ephemeral=True)
+#         return
 
-    # ライン作成（startから最後まで）
-    lines = []
-    for i in range(start, total + 1):
-        uid, mu = sorted_users[i - 1]
-        member = interaction.guild.get_member(uid)
-        name = member.display_name if member else f"Unknown({uid})"
-        lines.append(f"{i}位: {name} | {mu:.1f}")
+#     # ライン作成（startから最後まで）
+#     lines = []
+#     for i in range(start, total + 1):
+#         uid, mu = sorted_users[i - 1]
+#         member = interaction.guild.get_member(uid)
+#         name = member.display_name if member else f"Unknown({uid})"
+#         lines.append(f"{i}位: {name} | {mu:.1f}")
 
-    # ページ分割
-    PAGE_SIZE = 20
-    pages = []
-    for i in range(0, len(lines), PAGE_SIZE):
-        chunk = lines[i:i + PAGE_SIZE]
-        embed = discord.Embed(
-            title=f"順位表 {start}位〜{total}位",
-            description="\n".join(chunk),
-            color=discord.Color.gold()
-        )
-        embed.set_footer(text=f"ページ {len(pages)+1}/{(len(lines)-1)//PAGE_SIZE+1} | 全{total}人中")
-        pages.append(embed)
+#     # ページ分割
+#     PAGE_SIZE = 20
+#     pages = []
+#     for i in range(0, len(lines), PAGE_SIZE):
+#         chunk = lines[i:i + PAGE_SIZE]
+#         embed = discord.Embed(
+#             title=f"順位表 {start}位〜{total}位",
+#             description="\n".join(chunk),
+#             color=discord.Color.gold()
+#         )
+#         embed.set_footer(text=f"ページ {len(pages)+1}/{(len(lines)-1)//PAGE_SIZE+1} | 全{total}人中")
+#         pages.append(embed)
 
-    # ページ切替ビューをセット
-    view = RankingView(pages, interaction.user, start, total, interaction.guild)
-    await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
+#     # ページ切替ビューをセット
+#     view = RankingView(pages, interaction.user, start, total, interaction.guild)
+#     await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
 
 @bot.tree.command(name="c", description="マッチング待機リストに参加")
 async def match_join(interaction: discord.Interaction):
